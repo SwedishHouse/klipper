@@ -4,3 +4,8 @@ out
 .config
 .config.old
 klippy/.version
+.out
+.check_cache
+.log
+.cmake
+
