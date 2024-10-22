@@ -476,9 +476,10 @@ class GCodeMove:
 
 class THCHandler:
 
-    def __init__(self, config):
+    def __init__(self, config, axis):
         self.__gcode_cmd = None
         self.config = config
+        self.axis = axis
         self.printer = config.get_printer()
         self.__toolhead = None
         self.__segments = []
@@ -489,7 +490,7 @@ class THCHandler:
         self.__index = 0
         self.__len = 0
         self.pattern = r"(?P<G>G\d) X(?P<X>-?\d+(\.\d+)?) Y(?P<Y>-?\d+(\.\d+)?) Z(?P<Z>-?\d+(\.\d+)?) F(?P<F>-?\d+(\.\d+)?)"
-        self._position_in_the_plane = {'X': 0, 'Y': 0}
+        self._position_in_the_plane = dict(zip(self.axis, range(len(self.axis))))
         self.printer.register_event_handler("klippy:connect", self.__connect_printer_event)
 
     @staticmethod
@@ -586,7 +587,7 @@ class GCodeMoveThc(GCodeMove):
 
     def __init__(self, config, toolhead_id="toolhead"):
         super().__init__(config, toolhead_id)
-        self.thc_handler = THCHandler(config=config)
+        self.thc_handler = THCHandler(config, self.axis_names)
 
     def _handle_ready(self):
         super()._handle_ready()
