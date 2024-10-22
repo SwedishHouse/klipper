@@ -500,8 +500,8 @@ class THCHandler:
 
 
     def __connect_printer_event(self):
-        gcode_move = self.printer.lookup_object('toolhead')
-
+        toolhead = self.printer.lookup_object('toolhead')
+        gcode_move = self.printer.lookup_object('GCodeMoveThc')
         print('THC gcode connected')
 
     def __printer_ready_event(self):
