@@ -478,15 +478,20 @@ class THCHandler:
 
     def __init__(self, config):
         self.__gcode_cmd = None
+        self.config = config
         self.printer = config.get_printer()
         self.__toolhead = None
         self.__segments = []
+        self.axis_names = None
+        self.axis_count = 0
         self.__linear_size = 10  # mm
         self.__linear_velocity = 0
         self.__index = 0
         self.__len = 0
         self.pattern = r"(?P<G>G\d) X(?P<X>-?\d+(\.\d+)?) Y(?P<Y>-?\d+(\.\d+)?) Z(?P<Z>-?\d+(\.\d+)?) F(?P<F>-?\d+(\.\d+)?)"
         self._position_in_the_plane = {'X': 0, 'Y': 0}
+        self.printer.register_event_handler("klippy:connect", self.__connect_printer_event)
+
 
     @staticmethod
     def count_segments(line_length, segment_length):
@@ -496,7 +501,9 @@ class THCHandler:
 
 
     def __connect_printer_event(self):
-        pass
+        gcode_move = self.printer.lookup_object('toolhead')
+
+        print('THC gcode connected')
 
     def __printer_ready_event(self):
         """
@@ -509,7 +516,7 @@ class THCHandler:
     def __len__(self):
         return self.__len
 
-    def update_position_in_plane(self, coord:dict):
+    def update_position_in_plane(self, coord: dict):
         if 'X' in coord:
             self._position_in_the_plane['X'] = coord['X']
         if 'Y' in coord:    
@@ -540,13 +547,20 @@ class THCHandler:
     def gcmd_dict_to_str(gcode:dict):
         return ' '.join(f"{k}: {v}" for k, v in gcode.items())
 
+    @staticmethod
+    def add_values_to_gcode(gcode, **kwargs):
+        for key in gcode:
+            if key in kwargs:
+                gcode[key] += kwargs[key]
+        return gcode
+
     def update_segment(self, gcode: dict):
-        planar_distance = self.get_distance(gcode)
+        planar_distance = self.get_distance(gcode)  # calculate distance between gcode command and current position
         if planar_distance > self.__linear_size:
             number_segments = self.count_segments(planar_distance, self.__linear_size)
-            x_coord, y_coord, z_coord, *f = self.__toolhead.get_position()
+            positions = self.__toolhead.get_position()
             for i in range(number_segments):
-                self.__segments.append(self.gcmd_dict_to_str())
+                self.__segments.append(self.gcmd_dict_to_str(self.add_values_to_gcode()))
 
     def update_gcode(self, gcode: str):
         """_summary_
