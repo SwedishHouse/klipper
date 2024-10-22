@@ -492,7 +492,6 @@ class THCHandler:
         self._position_in_the_plane = {'X': 0, 'Y': 0}
         self.printer.register_event_handler("klippy:connect", self.__connect_printer_event)
 
-
     @staticmethod
     def count_segments(line_length, segment_length):
         if segment_length == 0:
