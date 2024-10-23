@@ -478,19 +478,20 @@ class THCHandler:
 
     def __init__(self, config, axis):
         self.__gcode_cmd = None
+        self.__command = {}
         self.config = config
         self.axis = axis
         self.printer = config.get_printer()
         self.__toolhead = None
         self.__segments = []
-        self.axis_names = None
+        # self.axis_names = None
         self.axis_count = 0
         self.__linear_size = 10  # mm
         self.__linear_velocity = 0
         self.__index = 0
         self.__len = 0
         self.pattern = r"(?P<G>G\d) X(?P<X>-?\d+(\.\d+)?) Y(?P<Y>-?\d+(\.\d+)?) Z(?P<Z>-?\d+(\.\d+)?) F(?P<F>-?\d+(\.\d+)?)"
-        self._position_in_the_plane = dict(zip(self.axis, range(len(self.axis))))
+        self._position_in_the_plane = dict(zip(self.axis, [0.0] * len(self.axis)))
         self.printer.register_event_handler("klippy:connect", self.__connect_printer_event)
 
     @staticmethod
@@ -501,8 +502,9 @@ class THCHandler:
 
 
     def __connect_printer_event(self):
-        toolhead = self.printer.lookup_object('toolhead')
-        gcode_move = self.printer.lookup_object('GCodeMoveThc')
+        self.__toolhead = self.printer.lookup_object('toolhead')
+        self.gcode_dispatch = self.printer.lookup_object('gcode')
+        # gcode_move = self.printer.lookup_object('GCodeMoveThc')
         print('THC gcode connected')
 
     def __printer_ready_event(self):
@@ -541,7 +543,34 @@ class THCHandler:
         pass
 
     def get_distance(self, new_coord: dict) -> float:
-        return sqrt((self._position_in_the_plane['X'] - new_coord['X']) ^ 2 + (self._position_in_the_plane['Y'] - new_coord['Y'])^ 2)
+        # if '+' in new_coord.values() or '-' in new_coord.values():
+        #     return self.get_distance_relative_mode(new_coord=new_coord)
+        # else:
+        #     return self.get_distance_absolute_mode(new_coord=new_coord)
+        old_coords = self._position_in_the_plane
+        # for key, val in new_coord.items():
+        #     old_coords[key] += float(val)
+        differs = [old_coords[key] + float(new_coord[key]) for key in new_coord if key in old_coords]
+        result = sqrt(sum(map(lambda x: x ** 2, differs)))
+        return result
+        
+    def get_distance_relative_mode(self, new_coord: dict):
+        old_coords = self._position_in_the_plane
+        # for key, val in new_coord.items():
+        #     old_coords[key] += float(val)
+        differs = [old_coords[key] + float(new_coord[key]) for key in new_coord]
+        result = sqrt(sum(map(pow, differs)))
+        return result
+
+    
+    def get_distance_absolute_mode(self, new_coord: dict):
+        old_coords = self._position_in_the_plane
+        new_coords = old_coords.copy()
+        for key, val in new_coord.items():
+            new_coords[key] = float(val)
+        differs = [new_coords[key] - old_coords[key] for key in old_coords]
+        result = sqrt(sum(map(lambda x: x ** 2, differs)))
+        return result
 
     @staticmethod
     def gcmd_dict_to_str(gcode:dict):
@@ -559,16 +588,44 @@ class THCHandler:
         if planar_distance > self.__linear_size:
             number_segments = self.count_segments(planar_distance, self.__linear_size)
             positions = self.__toolhead.get_position()
-            for i in range(number_segments):
-                self.__segments.append(self.gcmd_dict_to_str(self.add_values_to_gcode()))
+            for i in range(1, number_segments + 1):
+                self.__segments.append(self.get_next_intermediate_point(positions, gcode, i, number_segments))
 
-    def update_gcode(self, gcode: str):
+    @staticmethod
+    def get_next_intermediate_point(start_point: list, end_point: dict,segment_num: int, segments_count: int):
+        start = dict(zip(['X', 'Y', 'Z'], start_point))
+        # result = dict(zip(['X', 'Y', 'Z', 'F'], start_point))
+        result = start.copy()
+        end = end_point.copy()
+        signs = dict.fromkeys(['X', 'Y', 'Z'])
+        for i in signs:
+            if i in end:
+                signs[i] = '+' if  '+' in end[i] else '-' if '-' in end[i] else ''
+        # signs = dict(zip(['X', 'Y', 'Z'], ['+' if '+' in v else '-' if '-' in v else '' for k, v in end_point.items()]))
+        end = dict(zip(end_point.keys(), list(map(float, end_point.values()))))
+        for key in start:
+            if key in end_point:
+                result[key] = start[key] + (end[key] - start[key]) * segment_num / segments_count
+        result = {key: str(val) for key, val in result.items()}
+        for key, val in result.items():
+            if key in signs and signs[key]:
+                result[key] = signs[key] + result[key]
+        pass
+        return result
+
+    def update_gcode(self, gcode: GCodeCommand):
         """_summary_
         Handle new gcode string before segmentation
         Args:
-            gcode (str): new gcode from manual input
+            gcode : new gcode from manual input
         """
-        pass
+        for key, val in gcode.get_command_parameters().items():
+            self.__command[key] = val
+        self.update_segment(self.__command)
+    
+    @staticmethod
+    def built_gcode_object(gcode, command, commandline, params, need_ack: bool) -> GCodeDispatch:
+        return GCodeDispatch(gcode, command, commandline, params, need_ack)
 
     def __iter__(self):
         self.__index = 0  # Reset the index for new iteration
@@ -591,13 +648,15 @@ class GCodeMoveThc(GCodeMove):
 
     def _handle_ready(self):
         super()._handle_ready()
-
-
+        
 
     def cmd_G1(self, gcmd):
         self.thc_handler.update_gcode(gcmd)
-        for i in self.thc_handler:
-            super().cmd_G1(i)
+        try:
+            for i in self.thc_handler:
+                super().cmd_G1(i)
+        except StopIteration:
+            pass
 
 def load_config(config):
     return GCodeMoveThc(config=config)
