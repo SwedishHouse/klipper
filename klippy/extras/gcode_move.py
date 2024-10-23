@@ -611,6 +611,7 @@ class THCHandler:
             if key in signs and signs[key]:
                 result[key] = signs[key] + result[key]
         pass
+        result.update({'G':1})
         return result
 
     def update_gcode(self, gcode: GCodeCommand):
@@ -637,6 +638,7 @@ class THCHandler:
             self.__index += 1
             return item
         else:
+            self.__segments.clear()
             raise StopIteration
 
 
@@ -654,7 +656,15 @@ class GCodeMoveThc(GCodeMove):
         self.thc_handler.update_gcode(gcmd)
         try:
             for i in self.thc_handler:
-                super().cmd_G1(i)
+                cmd = gcmd.get_command()
+                cmd_line = gcmd.get_commandline()
+                params = gcmd.get_command_parameters()
+                for key in params:
+                    if key in i:
+                        params[key] = i[key]
+                cmd_line = ' '.join([f"{key}{val}" for key, val in params.items()])
+                new_gcode = GCodeCommand(self.thc_handler.gcode_dispatch, cmd, cmd_line, params, False)
+                super().cmd_G1(new_gcode)
         except StopIteration:
             pass
 
