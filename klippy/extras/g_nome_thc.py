@@ -112,7 +112,7 @@ class THC:
         pass 
 
     def set_pwm(self, value):
-        self.pwm_pin.set_pwm(100, value)
+        self.pwm_pin.set_pwm(2, value)
     
     def set_dir_pin(self, value):
         self.dir_pin.set_digital(value)
