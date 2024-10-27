@@ -24,9 +24,11 @@ class MotionQueue:
             "velocity": params.get("F", 0)
         }
         logging.info(f"Adding move: {move}")
-        self.toolhead.move_to(move["position"], move["velocity"])
+        # self.toolhead.move_to(move["position"], move["velocity"])
+        self.toolhead.drip_move(move["position"], move["velocity"], None)
 
     def cmd_clear_queue(self, params):
         logging.info("Clearing queue")
-        self.toolhead.dwell(0)  # This effectively clears the move queue
-        self.toolhead.flush_moves()
+        # self.toolhead.dwell(0)  # This effectively clears the move queue
+        
+        # self.toolhead.flush_moves()
