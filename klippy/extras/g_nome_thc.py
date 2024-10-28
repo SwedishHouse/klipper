@@ -76,7 +76,7 @@ class THC:
         self.__arc_pin = None
         # self.toolhead = None
         dir_pin, enable_pin = config.get('dir_pin'), config.get('enable_pin')
-        pins = {'dir_pin':dir_pin, 'enable_pin': enable_pin}
+        pins = {'dir_pin': dir_pin, 'enable_pin': enable_pin}
         ppins = self.printer.lookup_object('pins')
         for key, val in pins.items():
             ppins.allow_multi_use_pin(val)
