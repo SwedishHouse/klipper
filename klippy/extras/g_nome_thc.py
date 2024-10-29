@@ -1,4 +1,5 @@
 import wiringpi as wpi
+from wiringpi import GPIO
 # import threading
 import time
 
@@ -7,16 +8,34 @@ class Stepper_THC:
 
     def __init__(self, pin_step, pin_dir, max_speed=1000, acceleration=100) -> None:
         # threading.Thread.__init__(self)
+        # self.gpio = wpi.GPIO(1)
         self.pin_step = pin_step
         self.pin_dir = pin_dir
-        wpi.wiringPiSetupGpio()
-        wpi.pinMode(self.pin_step, wpi.OUTPUT)
-        wpi.pinMode(self.pin_dir, wpi.OUTPUT)
+        wpi.wiringPiSetup()
+        wpi.pinMode(2, GPIO.OUTPUT)
+        # self.gpio.digitalWrite(2, 1)
+        # wpi.orangepi_set_gpio_mode(self.pin_step)
+        # wpi.orangepi_set_gpio_mode(self.pin_step, wpi.OUTPUT)
+        # wpi.orangepi_set_gpio_mode(self.pin_dir, wpi.OUTPUT)
+        time.sleep(.001)
+        wpi.digitalWrite(2, GPIO.HIGH)
+
+        # wpi.orangepi_digitalWrite(self.pin_step, wpi.HIGH)
+        time.sleep(.001)
+        wpi.digitalWrite(2, GPIO.LOW)
+        # wpi.orangepi_digitalWrite(self.pin_step, wpi.LOW)
         self.running = False
         self.target_steps = 0
         self.max_speed = max_speed  # steps per second
         self.acceleration = acceleration  # steps per second^2
         pass
+
+
+    def pin_toogle_low(self):
+        wpi.digitalWrite(self.pin_step, wpi.LOW)
+
+    def pin_toogle_high(self):
+        wpi.digitalWrite(self.pin_step, wpi.HIGH)
 
 
     def trapezoidal_profile(self, steps):
@@ -76,7 +95,7 @@ class THC:
         self.__arc_pin = None
         self.buttons = self.printer.load_object(config, "buttons")
         self.gcode = self.printer.lookup_object('gcode')
-        self.height_ctrl_stepper = Stepper_THC(0, 1)
+        self.height_ctrl_stepper = Stepper_THC(2, 1)
 
         # self.toolhead = None
         # dir_pin, enable_pin = config.get('dir_pin'), config.get('enable_pin')  # Setting up pins for sharing with Z stepper
@@ -129,15 +148,19 @@ class THC:
     # def set_enable_pin(self, value):
     #     self.enable_pin.set_digital(value)
 
-    def check_arc_pin(self):
-        state = self.__arc_pin.read_digital()
+    def check_arc_pin(self, eventtime):
+        state = self.__arc_pin.get_status(eventtime)
         return state
 
     def button_up_callback(self, eventtime, state):
-
+        print(f'{self.check_arc_pin(eventtime)}')
+        # self.height_ctrl_stepper.move(100, 1)
+        self.height_ctrl_stepper.pin_toogle_low()
+        time.sleep(0.010)
+        self.height_ctrl_stepper.pin_toogle_high()
         if state and self._is_ready:
             try:
-
+                
                 # self.set_pwm(0.5)
                 print('Button up callback!')
                 pass
@@ -149,9 +172,14 @@ class THC:
         pass
 
     def button_down_callback(self, eventtime, state):
-        
+        print(f'{self.check_arc_pin(eventtime)}')
+        # self.height_ctrl_stepper.move(100, 0)
+        self.height_ctrl_stepper.pin_toogle_low()
+        time.sleep(0.010)
+        self.height_ctrl_stepper.pin_toogle_high()
         if state and self._is_ready:
             try:
+                
                 pass
                 print('Button down callback!')
             except Exception as e:
