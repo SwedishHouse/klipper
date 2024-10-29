@@ -1,12 +1,12 @@
 import wiringpi as wpi
-import threading
+# import threading
 import time
 
 
 class Stepper_THC:
 
     def __init__(self, pin_step, pin_dir, max_speed=1000, acceleration=100) -> None:
-        threading.Thread.__init__(self)
+        # threading.Thread.__init__(self)
         self.pin_step = pin_step
         self.pin_dir = pin_dir
         wpi.wiringPiSetupGpio()
@@ -71,24 +71,28 @@ class Stepper_THC:
 class THC:
 
     def __init__(self, config) -> None:
+        # Load objects from config
         self.printer = config.get_printer()
-    
         self.__arc_pin = None
-        # self.toolhead = None
-        dir_pin, enable_pin = config.get('dir_pin'), config.get('enable_pin')
-        pins = {'dir_pin':dir_pin, 'enable_pin': enable_pin}
-        ppins = self.printer.lookup_object('pins')
-        for key, val in pins.items():
-            ppins.allow_multi_use_pin(val)
-            setattr(self, key, ppins.setup_pin('digital_out', val))
         self.buttons = self.printer.load_object(config, "buttons")
+        self.gcode = self.printer.lookup_object('gcode')
+        self.height_ctrl_stepper = Stepper_THC(0, 1)
 
-        self.pwn_pin = config.get('pin_pwm')  # Like step
-        self.cycle_time = config.getfloat('cycle_time', 0.01)
-        self.max_power = config.getfloat('max_power', 1.0)
-        self.pwm_pin = ppins.setup_pin('pwm', self.pwn_pin)
-        self.pwm_pin.setup_cycle_time(self.cycle_time)
-        self.pwm_pin.setup_max_duration(2)
+        # self.toolhead = None
+        # dir_pin, enable_pin = config.get('dir_pin'), config.get('enable_pin')  # Setting up pins for sharing with Z stepper
+        # pins = {'dir_pin': dir_pin, 'enable_pin': enable_pin}
+        # ppins = self.printer.lookup_object('pins')
+        # for key, val in pins.items():
+        #     ppins.allow_multi_use_pin(val)
+        #     setattr(self, key, ppins.setup_pin('digital_out', val))
+
+
+        # self.pwn_pin = config.get('pin_pwm')  # Like stepper pin
+        # self.cycle_time = config.getfloat('cycle_time', 0.01)
+        # self.max_power = config.getfloat('max_power', 1.0)
+        # self.pwm_pin = ppins.setup_pin('pwm', self.pwn_pin)
+        # self.pwm_pin.setup_cycle_time(self.cycle_time)
+        # self.pwm_pin.setup_max_duration(2)
 
 
         # THC pins
@@ -99,10 +103,9 @@ class THC:
         self.buttons.register_buttons([self.pin_down], self.button_down_callback)
 
         self.name = "THC"
-        self.gcode = self.printer.lookup_object('gcode')
+
         self._is_ready = False
 
-        
         self.running = False
         self.reactor = self.printer.get_reactor()
 
@@ -117,27 +120,31 @@ class THC:
         self._is_ready = True
         pass 
 
-    def set_pwm(self, value):
-        self.pwm_pin.set_pwm(2, value)
-    
-    def set_dir_pin(self, value):
-        self.dir_pin.set_digital(value)
+    # def set_pwm(self, value):
+    #     self.pwm_pin.set_pwm(2, value)
+    #
+    # def set_dir_pin(self, value):
+    #     self.dir_pin.set_digital(value)
+    #
+    # def set_enable_pin(self, value):
+    #     self.enable_pin.set_digital(value)
 
-    def set_enable_pin(self, value):
-        self.enable_pin.set_digital(value)
-    
+    def check_arc_pin(self):
+        state = self.__arc_pin.read_digital()
+        return state
+
     def button_up_callback(self, eventtime, state):
 
         if state and self._is_ready:
             try:
 
-                self.set_pwm(0.5)
- 
+                # self.set_pwm(0.5)
+                print('Button up callback!')
                 pass
             except Exception as e:
                 print(str(e))
         else:
-            print('Pin not ready!')
+            print('Button up callback: pin not ready!')
             pass
         pass
 
@@ -145,22 +152,19 @@ class THC:
         
         if state and self._is_ready:
             try:
- 
-                
-                
                 pass
+                print('Button down callback!')
             except Exception as e:
                 print(str(e))
         else:
-            print('Pin not ready!')
+            print('Button down callback: pin not ready!')
             pass
         pass
 
     def _connect_event(self):
         try:
             self.__arc_pin = self.printer.lookup_object('output_pin arc_on')
-            
-            print('Yes')
+            print('THC connect event')
         except Exception as e:
             print(str(e))
 
