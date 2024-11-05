@@ -1,35 +1,38 @@
 import wiringpi as wpi
 from wiringpi import GPIO
-# import threading
+import threading
 import time
 
 
 class Stepper_THC:
 
-    def __init__(self, pin_step, pin_dir, max_speed=1000, acceleration=100) -> None:
-        # threading.Thread.__init__(self)
+    # def __init__(self, pin_step, pin_dir, pin_enable, max_speed=1000, acceleration=100) -> None:
+    def __init__(self, config) -> None:
+        threading.Thread.__init__(self)
         # self.gpio = wpi.GPIO(1)
-        self.pin_step = pin_step
-        self.pin_dir = pin_dir
+        self.pin_step = config.getint('sbp_pin_step')
+        self.pin_dir = config.getint('sbp_pin_dir')
+        self.pin_enable = config.getint('sbp_pin_en')
+        self.max_speed = config.getint('speed', 1000)  # steps per second
+        self.acceleration = config.getint('acceleration', 100)  # steps per second^2
+        
+        # Setup pins
         wpi.wiringPiSetup()
-        wpi.pinMode(2, GPIO.OUTPUT)
-        # self.gpio.digitalWrite(2, 1)
-        # wpi.orangepi_set_gpio_mode(self.pin_step)
-        # wpi.orangepi_set_gpio_mode(self.pin_step, wpi.OUTPUT)
-        # wpi.orangepi_set_gpio_mode(self.pin_dir, wpi.OUTPUT)
-        time.sleep(.001)
-        wpi.digitalWrite(2, GPIO.HIGH)
-
-        # wpi.orangepi_digitalWrite(self.pin_step, wpi.HIGH)
-        time.sleep(.001)
-        wpi.digitalWrite(2, GPIO.LOW)
-        # wpi.orangepi_digitalWrite(self.pin_step, wpi.LOW)
+        wpi.pinMode(self.pin_step, GPIO.OUTPUT)
+        wpi.pinMode(self.pin_dir, GPIO.OUTPUT)
+        wpi.pinMode(self.pin_enable, GPIO.OUTPUT)
+        # wpi.digitalWrite(2, GPIO.HIGH)
         self.running = False
         self.target_steps = 0
-        self.max_speed = max_speed  # steps per second
-        self.acceleration = acceleration  # steps per second^2
-        pass
+        
 
+    def blink_all_pins(self):
+        """
+        Needs for debug purpose, toogle pins
+        """
+        wpi.digitalWrite(self.pin_step, int(not wpi.digitalRead(self.pin_step)))
+        wpi.digitalWrite(self.pin_dir, int(not wpi.digitalRead(self.pin_dir)))
+        wpi.digitalWrite(self.pin_enable, int(not wpi.digitalRead(self.pin_enable)))
 
     def pin_toogle_low(self):
         wpi.digitalWrite(self.pin_step, wpi.LOW)
@@ -75,7 +78,7 @@ class Stepper_THC:
 
     def _connect_event(self):
         try:
-
+            
             print('Stepper THC connect event')
         except Exception as e:
             print(str(e))
@@ -95,7 +98,9 @@ class THC:
         self.__arc_pin = None
         self.buttons = self.printer.load_object(config, "buttons")
         self.gcode = self.printer.lookup_object('gcode')
-        self.height_ctrl_stepper = Stepper_THC(2, 1)
+
+
+        self.height_ctrl_stepper = Stepper_THC(config)
 
         # self.toolhead = None
         # dir_pin, enable_pin = config.get('dir_pin'), config.get('enable_pin')  # Setting up pins for sharing with Z stepper
@@ -192,6 +197,7 @@ class THC:
     def _connect_event(self):
         try:
             self.__arc_pin = self.printer.lookup_object('output_pin arc_on')
+            self.height_ctrl_stepper.blink_all_pins()
             print('THC connect event')
         except Exception as e:
             print(str(e))
@@ -204,6 +210,9 @@ def load_config_prefix(config):
 
 
 if __name__ == "__main__":
+    stepper_pin = 2
+    dir_pin = 1
+    enable_pin = 0
     stepper = Stepper_THC(0, 1)  # Adjust pin numbers as needed
     # stepper.start()
     stepper.move(1000, wpi.LOW)
