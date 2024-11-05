@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="PublishConfigData" autoUpload="Always" serverName="orangepi@192.168.101.5:22 password (3)" remoteFilesAllowedToDisappearOnAutoupload="false">
+    <serverData>
+      <paths name="orangepi@192.168.101.5:22 password">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/klipper" local="$PROJECT_DIR$" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="orangepi@192.168.101.5:22 password (2)">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/home/orangepi/klipper" local="$PROJECT_DIR$" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="orangepi@192.168.101.5:22 password (3)">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/home/orangepi/klipper" local="$PROJECT_DIR$" />
+          </mappings>
+        </serverdata>
+      </paths>
+    </serverData>
+    <option name="myAutoUpload" value="ALWAYS" />
+  </component>
+</project>
