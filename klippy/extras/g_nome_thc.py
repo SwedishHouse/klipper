@@ -3,19 +3,41 @@ from wiringpi import GPIO
 import threading
 import time
 
+REPORT_TIME = 0.300
 
-class Stepper_THC:
+
+def sleep_microseconds(usec):
+    sec = usec // 1000000
+    remaining_usec = usec % 1000000
+        
+    time.sleep(sec)
+    while remaining_usec > 0:
+        time.sleep(0)  # Запускаем пустой таймаут
+        remaining_usec -= time.clock() % 1000000
+
+class THC_ADC:
+
+    def __init__(self, config) -> None:
+        self.printer = config.get_printer()
+        # self.name = config.get_name().split()[-1]
+        self.reactor = self.printer.get_reactor()
+        ppins = config.get_printer().lookup_object('pins')
+        self.mcu_adc = ppins.setup_pin('adc', config.get('sensor_pin'))
+
+class Stepper_THC(threading.Thread):
 
     # def __init__(self, pin_step, pin_dir, pin_enable, max_speed=1000, acceleration=100) -> None:
     def __init__(self, config) -> None:
-        threading.Thread.__init__(self)
+        super().__init__()
+        # threading.Thread.__init__(self)
         # self.gpio = wpi.GPIO(1)
         self.pin_step = config.getint('sbp_pin_step')
         self.pin_dir = config.getint('sbp_pin_dir')
         self.pin_enable = config.getint('sbp_pin_en')
         self.max_speed = config.getint('speed', 1000)  # steps per second
         self.acceleration = config.getint('acceleration', 100)  # steps per second^2
-        
+        self.pulse_time = config.getint('acceleration', 10)
+
         # Setup pins
         wpi.wiringPiSetup()
         wpi.pinMode(self.pin_step, GPIO.OUTPUT)
@@ -24,6 +46,7 @@ class Stepper_THC:
         # wpi.digitalWrite(2, GPIO.HIGH)
         self.running = False
         self.target_steps = 0
+        self.start()
         
 
     def blink_all_pins(self):
@@ -33,6 +56,14 @@ class Stepper_THC:
         wpi.digitalWrite(self.pin_step, int(not wpi.digitalRead(self.pin_step)))
         wpi.digitalWrite(self.pin_dir, int(not wpi.digitalRead(self.pin_dir)))
         wpi.digitalWrite(self.pin_enable, int(not wpi.digitalRead(self.pin_enable)))
+
+    def pulse_step(self):
+        wpi.digitalWrite(self.pin_step, GPIO.HIGH)
+        sleep_microseconds(self.pulse_time)
+        wpi.digitalWrite(self.pin_step, GPIO.LOW)
+
+    def set_direction(self, dir: int):
+        wpi.digitalWrite(self.pin_dir, dir)
 
     def pin_toogle_low(self):
         wpi.digitalWrite(self.pin_step, wpi.LOW)
@@ -48,20 +79,20 @@ class Stepper_THC:
         ramp_down_steps = steps - ramp_up_steps
         
         time_step = 1 / self.max_speed
-        for step in range(int(ramp_up_steps)):
-            wpi.digitalWrite(self.pin_step, wpi.HIGH)
-            time.sleep(time_step)
-            wpi.digitalWrite(self.pin_step, wpi.LOW)
-            time.sleep(time_step)
-            time_step -= 1 / (2 * self.acceleration * (step + 1))
+        # for step in range(int(ramp_up_steps)):
+        #     wpi.digitalWrite(self.pin_step, wpi.HIGH)
+        #     time.sleep(time_step)
+        #     wpi.digitalWrite(self.pin_step, wpi.LOW)
+        #     time.sleep(time_step)
+        #     time_step -= 1 / (2 * self.acceleration * (step + 1))
 
-        time_step = 1 / self.max_speed
-        for step in range(int(ramp_down_steps)):
-            wpi.digitalWrite(self.pin_step, wpi.HIGH)
-            time.sleep(time_step)
-            wpi.digitalWrite(self.pin_step, wpi.LOW)
-            time.sleep(time_step)
-            time_step += 1 / (2 * self.acceleration * (step + 1))
+        # time_step = 1 / self.max_speed
+        # for step in range(int(ramp_down_steps)):
+        #     wpi.digitalWrite(self.pin_step, wpi.HIGH)
+        #     time.sleep(time_step)
+        #     wpi.digitalWrite(self.pin_step, wpi.LOW)
+        #     time.sleep(time_step)
+        #     time_step += 1 / (2 * self.acceleration * (step + 1))
     
     def run(self):
         while self.running:
@@ -72,6 +103,9 @@ class Stepper_THC:
         self.target_steps = steps
         wpi.digitalWrite(self.pin_dir, direction)
         self.running = True
+        thread = threading.Thread(target=self.run)
+        thread.start()
+        thread.join()
 
     def stop(self):
         self.running = False
@@ -96,28 +130,13 @@ class THC:
         # Load objects from config
         self.printer = config.get_printer()
         self.__arc_pin = None
+        self.__arc_pin_status = False
+        self.__is_set_voltage = False
+        self.voltage_value = 0.0
         self.buttons = self.printer.load_object(config, "buttons")
         self.gcode = self.printer.lookup_object('gcode')
-
-
         self.height_ctrl_stepper = Stepper_THC(config)
-
-        # self.toolhead = None
-        # dir_pin, enable_pin = config.get('dir_pin'), config.get('enable_pin')  # Setting up pins for sharing with Z stepper
-        # pins = {'dir_pin': dir_pin, 'enable_pin': enable_pin}
-        # ppins = self.printer.lookup_object('pins')
-        # for key, val in pins.items():
-        #     ppins.allow_multi_use_pin(val)
-        #     setattr(self, key, ppins.setup_pin('digital_out', val))
-
-
-        # self.pwn_pin = config.get('pin_pwm')  # Like stepper pin
-        # self.cycle_time = config.getfloat('cycle_time', 0.01)
-        # self.max_power = config.getfloat('max_power', 1.0)
-        # self.pwm_pin = ppins.setup_pin('pwm', self.pwn_pin)
-        # self.pwm_pin.setup_cycle_time(self.cycle_time)
-        # self.pwm_pin.setup_max_duration(2)
-
+        self.adc = THC_ADC(config)
 
         # THC pins
         self.pin_up = config.get('pin_up')
@@ -144,55 +163,26 @@ class THC:
         self._is_ready = True
         pass 
 
-    # def set_pwm(self, value):
-    #     self.pwm_pin.set_pwm(2, value)
-    #
-    # def set_dir_pin(self, value):
-    #     self.dir_pin.set_digital(value)
-    #
-    # def set_enable_pin(self, value):
-    #     self.enable_pin.set_digital(value)
-
     def check_arc_pin(self, eventtime):
         state = self.__arc_pin.get_status(eventtime)
-        return state
+        return bool(state['value'])
+
+    def height_event(self, eventtime, state, direction):
+        arc_pin_state = self.check_arc_pin(eventtime)
+        if not state and arc_pin_state and self._is_ready:
+                # self.height_ctrl_stepper.blink_all_pins()
+                self.height_ctrl_stepper.move(100, direction)
+                # self.height_ctrl_stepper.pulse_step()
+
+        print('Button up callback: pin not ready!')
 
     def button_up_callback(self, eventtime, state):
-        print(f'{self.check_arc_pin(eventtime)}')
-        # self.height_ctrl_stepper.move(100, 1)
-        self.height_ctrl_stepper.pin_toogle_low()
-        time.sleep(0.010)
-        self.height_ctrl_stepper.pin_toogle_high()
-        if state and self._is_ready:
-            try:
-                
-                # self.set_pwm(0.5)
-                print('Button up callback!')
-                pass
-            except Exception as e:
-                print(str(e))
-        else:
-            print('Button up callback: pin not ready!')
-            pass
-        pass
+        # self.height_ctrl_stepper.set_direction(1)
+        self.height_event(eventtime=eventtime, state=state, direction=1)
 
     def button_down_callback(self, eventtime, state):
-        print(f'{self.check_arc_pin(eventtime)}')
-        # self.height_ctrl_stepper.move(100, 0)
-        self.height_ctrl_stepper.pin_toogle_low()
-        time.sleep(0.010)
-        self.height_ctrl_stepper.pin_toogle_high()
-        if state and self._is_ready:
-            try:
-                
-                pass
-                print('Button down callback!')
-            except Exception as e:
-                print(str(e))
-        else:
-            print('Button down callback: pin not ready!')
-            pass
-        pass
+        # self.height_ctrl_stepper.set_direction(0)
+        self.height_event(eventtime=eventtime, state=state, direction=0)
 
     def _connect_event(self):
         try:
