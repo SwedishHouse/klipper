@@ -2,18 +2,24 @@ import wiringpi as wpi
 from wiringpi import GPIO
 import threading
 import time
+import os
+import glob
+import csv
+
 
 REPORT_TIME = 0.300
-
+PATH_TO_PULSE_DATA = 'klippy/extras/thc_data'
 
 def sleep_microseconds(usec):
-    sec = usec // 1000000
-    remaining_usec = usec % 1000000
+    # sec = usec // 1000000
+    # remaining_usec = usec % 1000000
         
-    time.sleep(sec)
-    while remaining_usec > 0:
-        time.sleep(0)  # Запускаем пустой таймаут
-        remaining_usec -= time.clock() % 1000000
+    # time.sleep(sec)
+    # while remaining_usec > 0:
+    #     time.sleep(0)  # Запускаем пустой таймаут
+    #     remaining_usec -= time.clock() % 1000000
+    # start = wpi.delayMicroseconds()
+    pass
 
 class THC_ADC:
 
@@ -29,6 +35,8 @@ class Stepper_THC(threading.Thread):
     # def __init__(self, pin_step, pin_dir, pin_enable, max_speed=1000, acceleration=100) -> None:
     def __init__(self, config) -> None:
         super().__init__()
+        self.__pulses_timings = {}
+        self.load_data()
         # threading.Thread.__init__(self)
         # self.gpio = wpi.GPIO(1)
         self.pin_step = config.getint('sbp_pin_step')
@@ -36,18 +44,33 @@ class Stepper_THC(threading.Thread):
         self.pin_enable = config.getint('sbp_pin_en')
         self.max_speed = config.getint('speed', 1000)  # steps per second
         self.acceleration = config.getint('acceleration', 100)  # steps per second^2
-        self.pulse_time = config.getint('acceleration', 10)
+        self.pulse_time = config.getfloat('step_pulse_duration', 0.000005)
+        self.pulse_time_us = self.pulse_time * 10e6
 
         # Setup pins
         wpi.wiringPiSetup()
         wpi.pinMode(self.pin_step, GPIO.OUTPUT)
         wpi.pinMode(self.pin_dir, GPIO.OUTPUT)
         wpi.pinMode(self.pin_enable, GPIO.OUTPUT)
-        # wpi.digitalWrite(2, GPIO.HIGH)
+        # Set LOW all pins
+        wpi.digitalWrite(self.pin_step, GPIO.LOW)
+        wpi.digitalWrite(self.pin_dir, GPIO.LOW)
+        wpi.digitalWrite(self.pin_enable, GPIO.LOW)
+        
         self.running = False
         self.target_steps = 0
         self.start()
-        
+    
+    def load_data(self):
+        files = os.listdir(PATH_TO_PULSE_DATA)
+        for file in files:
+            key = '-'.join(file.split('.')[0].split('_')[-2::])
+            with open(PATH_TO_PULSE_DATA + '/' + file, 'r') as f:
+                reader = csv.reader(f)
+                row = list(map(lambda x: (float(x) * 1e6).__ceil__(), next(reader)))
+                self.__pulses_timings[key] = row
+
+
 
     def blink_all_pins(self):
         """
@@ -59,8 +82,15 @@ class Stepper_THC(threading.Thread):
 
     def pulse_step(self):
         wpi.digitalWrite(self.pin_step, GPIO.HIGH)
-        sleep_microseconds(self.pulse_time)
+        # sleep_microseconds(self.pulse_time_us)
+        # time.sleep(self.pulse_time)
+        wpi.delayMicroseconds(5)
         wpi.digitalWrite(self.pin_step, GPIO.LOW)
+
+    def pulses_10_mm(self):
+        for i in self.__pulses_timings['10-mm']:
+            wpi.digitalWrite(self.pin_step, GPIO.HIGH)
+
 
     def set_direction(self, dir: int):
         wpi.digitalWrite(self.pin_dir, dir)
@@ -79,24 +109,39 @@ class Stepper_THC(threading.Thread):
         ramp_down_steps = steps - ramp_up_steps
         
         time_step = 1 / self.max_speed
-        # for step in range(int(ramp_up_steps)):
-        #     wpi.digitalWrite(self.pin_step, wpi.HIGH)
-        #     time.sleep(time_step)
-        #     wpi.digitalWrite(self.pin_step, wpi.LOW)
-        #     time.sleep(time_step)
-        #     time_step -= 1 / (2 * self.acceleration * (step + 1))
+        for step in range(int(ramp_up_steps)):
+            wpi.digitalWrite(self.pin_step, wpi.HIGH)
+            time.sleep(time_step)
+            wpi.digitalWrite(self.pin_step, wpi.LOW)
+            time.sleep(time_step)
+            time_step -= 1 / (2 * self.acceleration * (step + 1))
 
-        # time_step = 1 / self.max_speed
-        # for step in range(int(ramp_down_steps)):
-        #     wpi.digitalWrite(self.pin_step, wpi.HIGH)
-        #     time.sleep(time_step)
-        #     wpi.digitalWrite(self.pin_step, wpi.LOW)
-        #     time.sleep(time_step)
-        #     time_step += 1 / (2 * self.acceleration * (step + 1))
+        time_step = 1 / self.max_speed
+        for step in range(int(ramp_down_steps)):
+            wpi.digitalWrite(self.pin_step, wpi.HIGH)
+            time.sleep(time_step)
+            wpi.digitalWrite(self.pin_step, wpi.LOW)
+            time.sleep(time_step)
+            time_step += 1 / (2 * self.acceleration * (step + 1))
     
     def run(self):
         while self.running:
-            self.trapezoidal_profile(self.target_steps)
+            pass
+            # self.trapezoidal_profile(self.target_steps)
+            for i in self.__pulses_timings['10-mm']:
+                # self.pulse_step()
+                start = wpi.micros()
+                wpi.digitalWrite(self.pin_step, GPIO.HIGH)
+                while wpi.micros() - start < 10:
+                    pass
+                # sleep_microseconds(self.pulse_time_us)
+                # time.sleep(self.pulse_time)
+                # wpi.delayMicroseconds(10)
+                wpi.digitalWrite(self.pin_step, GPIO.LOW)
+                start = wpi.micros()
+                while wpi.micros() - start < i:
+                    pass
+                # wpi.delayMicroseconds(250)
             self.running = False
 
     def move(self, steps, direction):
@@ -187,7 +232,7 @@ class THC:
     def _connect_event(self):
         try:
             self.__arc_pin = self.printer.lookup_object('output_pin arc_on')
-            self.height_ctrl_stepper.blink_all_pins()
+            # self.height_ctrl_stepper.blink_all_pins()
             print('THC connect event')
         except Exception as e:
             print(str(e))
