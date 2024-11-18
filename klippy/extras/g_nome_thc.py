@@ -24,12 +24,32 @@ def sleep_microseconds(usec):
 
 class THC_ADC:
 
+    REPORT_TIME= 1.300  # seconds
+
+
     def __init__(self, config) -> None:
         self.printer = config.get_printer()
+        self.reactor = self.printer.get_reactor()
         # self.name = config.get_name().split()[-1]
         self.reactor = self.printer.get_reactor()
         ppins = config.get_printer().lookup_object('pins')
         self.mcu_adc = ppins.setup_pin('adc', config.get('sensor_pin'))
+        self.mcu_adc.setup_adc_callback(REPORT_TIME, self.adc_callback)
+        self.sample_timer = self.reactor.register_timer(self.sample)
+        self.printer.register_event_handler("klippy:ready", self.__ready_event)
+        pass
+
+    def adc_callback(self, read_time, read_value):
+        print(self.mcu_adc.get_last_value())
+        print(read_value)
+        pass
+    
+    def sample(self):
+        print(self.mcu_adc.get_last_value())
+
+    def __ready_event(self):
+        print(self.mcu_adc.get_last_value())
+        pass
 
 class Height_Handler:
     PATH_TO_PULSE_DATA = 'klippy/extras/thc_data'
