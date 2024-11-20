@@ -9,7 +9,9 @@ import json
 
 
 REPORT_TIME = 0.300
-
+SAMPLE_TIME = 0.001
+SAMPLE_COUNT = 8
+# REPORT_TIME = 0.300
 
 def sleep_microseconds(usec):
     # sec = usec // 1000000
@@ -30,25 +32,33 @@ class THC_ADC:
     def __init__(self, config) -> None:
         self.printer = config.get_printer()
         self.reactor = self.printer.get_reactor()
-        # self.name = config.get_name().split()[-1]
-        self.reactor = self.printer.get_reactor()
-        ppins = config.get_printer().lookup_object('pins')
-        self.mcu_adc = ppins.setup_pin('adc', config.get('sensor_pin'))
-        self.mcu_adc.setup_adc_callback(REPORT_TIME, self.adc_callback)
-        self.sample_timer = self.reactor.register_timer(self.sample)
+
+        ppins = self.printer.lookup_object('pins')
+        pin_name = config.get('sensor_pin')
+        self.mcu_adc = ppins.setup_pin('adc', pin_name)
+        self.mcu_adc.setup_adc_callback(REPORT_TIME, self.callback)
+        self.mcu_adc.setup_adc_sample(SAMPLE_TIME, SAMPLE_COUNT)
+        # adc_ppin = ppins.lookup_pin(adc_pin)
+        # self.mcu = mcu = adc_ppin['chip']
+        # self.mcu = self.printer.get_mcu()
+        # self.oid = self.mcu.create_oid()
+
+        # self.mcu_adc = self.mcu.setup_pin('adc', adc_pin)
+        # self.mcu_adc.setup_adc_callback(REPORT_TIME, self.adc_callback)
+        # self.sample_timer = self.reactor.register_timer(self.sample)
         self.printer.register_event_handler("klippy:ready", self.__ready_event)
         pass
 
-    def adc_callback(self, read_time, read_value):
+    def callback(self, read_time, read_value):
         print(self.mcu_adc.get_last_value())
         print(read_value)
         pass
     
-    def sample(self):
-        print(self.mcu_adc.get_last_value())
+    # def sample(self):
+    #     print(self.mcu_adc.get_last_value())
 
     def __ready_event(self):
-        print(self.mcu_adc.get_last_value())
+        # print(self.mcu_adc.get_last_value())
         pass
 
 class Height_Handler:
