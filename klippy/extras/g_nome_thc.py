@@ -38,14 +38,7 @@ class THC_ADC:
         self.mcu_adc = ppins.setup_pin('adc', pin_name)
         self.mcu_adc.setup_adc_callback(REPORT_TIME, self.callback)
         self.mcu_adc.setup_adc_sample(SAMPLE_TIME, SAMPLE_COUNT)
-        # adc_ppin = ppins.lookup_pin(adc_pin)
-        # self.mcu = mcu = adc_ppin['chip']
-        # self.mcu = self.printer.get_mcu()
-        # self.oid = self.mcu.create_oid()
 
-        # self.mcu_adc = self.mcu.setup_pin('adc', adc_pin)
-        # self.mcu_adc.setup_adc_callback(REPORT_TIME, self.adc_callback)
-        # self.sample_timer = self.reactor.register_timer(self.sample)
         self.printer.register_event_handler("klippy:ready", self.__ready_event)
         pass
 
