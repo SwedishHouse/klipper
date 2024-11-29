@@ -134,9 +134,9 @@ class MachineTableSheetFinder:
         self.printer = config.get_printer()
         self.config = config
         self.__limit = None
-        self.__start_height = config.getfloat('start_height', 50.0)
-        self.__sheet_thickness = config.getfloat('start_height', 3.0)
-        self.__work_height = config.getfloat('work_height', 3.0)
+        self.__startSearchPoint = config.getfloat('start_height', 50.0)
+        self.__sheetThickness = config.getfloat('start_height', 3.0)
+        self.__cutterDistanceToSheet = config.getfloat('work_height', 3.0)
         self.__step_distances = (3.0, 1.0, 0.5, 0.25, 0.1)
         self.__step_distance = config.getfloat('step_distance', 1.0)
         self.__is_run = False
@@ -152,15 +152,15 @@ class MachineTableSheetFinder:
 
     @property
     def get_sheet_thickness(self):
-        return self.__sheet_thickness
+        return self.__sheetThickness
     
     @get_sheet_thickness.setter
     def get_sheet_thickness(self, value):
-        self.__sheet_thickness = value
+        self.__sheetThickness = value
         
 
-    def go_start_position(self):
-        self.gcode.run_script_from_command(f"G0 Z{self.__start_height}")
+    def go_to_start_position(self):
+        self.gcode.run_script_from_command(f"G0 Z{self.__startSearchPoint}")
         pass
 
     def sensor_event(self, time, state):
@@ -168,11 +168,9 @@ class MachineTableSheetFinder:
         self.__sensor_state['state'] = state
         
     def __calc_start_position(self):
-        if self.__start_height >= self.__limit:
-            self.__start_height = self.__limit * 0.9
+        if self.__startSearchPoint >= self.__limit:
+            self.__startSearchPoint = self.__limit * 0.9
         
-        
-
     def _connect_event(self):# Called when the printer is connected
         self.toolhead = self.printer.lookup_object('toolhead')
         self.__limit = self.toolhead.kin.axes_max.z
@@ -186,6 +184,9 @@ class MachineTableSheetFinder:
                                                 f"G0 Z+{self.__step_distance}\n"
                                                 "G90")
             self.toolhead.wait_moves()
+        self.gcode.run_script_from_command("G91\n"
+                                                f"G0 Z-{self.__sheetThickness + self.__cutterDistanceToSheet}\n"
+                                                "G90")
 
     def _ready_event(self):
         pass
@@ -193,11 +194,19 @@ class MachineTableSheetFinder:
 
     def cmd_FIND_METAL_SHEET(self, gcmd):
         pass
+        self.__is_run = True
         print(gcmd)
         self.__calc_start_position()
         self.sensor.start()
-        self.go_start_position()
-        self.move_down_and_check_touch()
+        self.go_to_start_position()
+        try:
+            self.move_down_and_check_touch()
+        except Exception as e:
+            pass
+        self.__is_run = False
+        self.__sensor_state['state'] = False
+
+
         pass
 
 
