@@ -1,5 +1,5 @@
 import abc
-
+import threading
 
 class Signal(metaclass=abc.ABCMeta):
 
@@ -54,15 +54,14 @@ class Signal(metaclass=abc.ABCMeta):
        """
        pass
 
-
-
 class MetalSensor(Signal):
 
-    sensor_types = {'NPN': 0, 'PNP': 1}
+    sensor_types = {'NPN': 1, 'PNP': 1}
+    send = {'time': 0.0, 'state': False}
 
     def __init__(self, config) -> None:
         self.printer = config.get_printer()
-        self.name = config.get_name().split(' ')[-1]
+        # self.name = config.get_name().split(' ')[-1]
         # Object params
         self.__is_ready = False
         self.__last_button_event_time = 0.0 # Needs for handling contact bounce
@@ -109,9 +108,15 @@ class MetalSensor(Signal):
         self._is_ready = True
 
     def button_callback(self, eventtime, state):
-        if not self.__button_event_is_set:
-            self.__button_event_is_set = True
-            self.__last_button_event_time = eventtime
+        pass
+        # if not self.__button_event_is_set:
+        #     self.__button_event_is_set = True
+        #     self.__last_button_event_time = eventtime
+        if self.__is_ready and self.__is_activated(state):
+            self.emit(eventtime, True)
+    
+    def start(self):
+        self.__is_ready = True
     
     def __is_activated(self, state):
         return self.active_state == state
@@ -119,9 +124,85 @@ class MetalSensor(Signal):
     def setup_event_hanler(self, event_hanler):
         self.sensor_event_handler = event_hanler
  
+class MachineTableSheetFinder:
+
+    cmd_FIND_METAL_SHEET_str = 'FIND_METAL_SHEET'
+    cmd_FIND_METAL_SHEET_help = "The beginning of the metal sheet search process"
+
+
+    def __init__(self, config) -> None:
+        self.printer = config.get_printer()
+        self.config = config
+        self.__limit = None
+        self.__start_height = config.getfloat('start_height', 50.0)
+        self.__sheet_thickness = config.getfloat('start_height', 3.0)
+        self.__work_height = config.getfloat('work_height', 3.0)
+        self.__step_distances = (3.0, 1.0, 0.5, 0.25, 0.1)
+        self.__step_distance = config.getfloat('step_distance', 1.0)
+        self.__is_run = False
+        self.__sensor_state = {'time': 0.0, 'state': False}
+        self.__axis_max = None
+
+        self.sensor:MetalSensor = MetalSensor(self.config)
+        self.gcode = self.printer.lookup_object('gcode')
+        self.toolhead = None
+        self.gcode.register_command(self.cmd_FIND_METAL_SHEET_str, self.cmd_FIND_METAL_SHEET, desc=self.cmd_FIND_METAL_SHEET_help)
+        self.printer.register_event_handler("klippy:connect", self._connect_event)
+        self.printer.register_event_handler("klippy:ready", self._ready_event)
+
+    @property
+    def get_sheet_thickness(self):
+        return self.__sheet_thickness
+    
+    @get_sheet_thickness.setter
+    def get_sheet_thickness(self, value):
+        self.__sheet_thickness = value
+        
+
+    def go_start_position(self):
+        self.gcode.run_script_from_command(f"G0 Z{self.__start_height}")
+        pass
+
+    def sensor_event(self, time, state):
+        self.__sensor_state['time'] = time
+        self.__sensor_state['state'] = state
+        
+    def __calc_start_position(self):
+        if self.__start_height >= self.__limit:
+            self.__start_height = self.__limit * 0.9
+        
+        
+
+    def _connect_event(self):# Called when the printer is connected
+        self.toolhead = self.printer.lookup_object('toolhead')
+        self.__limit = self.toolhead.kin.axes_max.z
+        self.sensor.connect(self.sensor_event)
+        pass
+
+    def move_down_and_check_touch(self):
+        while not self.__sensor_state['state']:
+            
+            self.gcode.run_script_from_command("G91\n"
+                                                f"G0 Z+{self.__step_distance}\n"
+                                                "G90")
+            self.toolhead.wait_moves()
+
+    def _ready_event(self):
+        pass
+        # self.sensor.connect()
+
+    def cmd_FIND_METAL_SHEET(self, gcmd):
+        pass
+        print(gcmd)
+        self.__calc_start_position()
+        self.sensor.start()
+        self.go_start_position()
+        self.move_down_and_check_touch()
+        pass
+
 
 def load_config(config):
-    return MetalSensor(config)
+    return MachineTableSheetFinder(config)
 
 def load_config_prefix(config):
-    return MetalSensor(config)
+    return MachineTableSheetFinder(config)
