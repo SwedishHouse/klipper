@@ -1,0 +1,7 @@
+CONFIG g-nome-config.cfg
+DICTIONARY stm32h723.dict
+
+set_origin
+QUERY_ENDSTOPS
+G1 X50 Y50 F3000 ; Move to X=50, Y=50 at speed 3000
+

@@ -76,7 +76,6 @@ class MetalSensor(Signal):
             raise ValueError(f'Unknown sensor type {self.sensor_type}')
         else:
             self.active_state = self.sensor_types[self.sensor_type]
-        
     
         self.pin = config.get('pin')
         
@@ -108,7 +107,6 @@ class MetalSensor(Signal):
         self._is_ready = True
 
     def button_callback(self, eventtime, state):
-        pass
         # if not self.__button_event_is_set:
         #     self.__button_event_is_set = True
         #     self.__last_button_event_time = eventtime
@@ -135,7 +133,7 @@ class MachineTableSheetFinder:
         self.config = config
         self.__limit = None
         self.__startSearchPoint = config.getfloat('start_height', 50.0)
-        self.__sheetThickness = config.getfloat('start_height', 3.0)
+        self.__sheetThickness = config.getfloat('sheet_thickness', 3.0)
         self.__cutterDistanceToSheet = config.getfloat('work_height', 3.0)
         self.__step_distances = (3.0, 1.0, 0.5, 0.25, 0.1)
         self.__step_distance = config.getfloat('step_distance', 1.0)
@@ -178,10 +176,11 @@ class MachineTableSheetFinder:
         pass
 
     def move_down_and_check_touch(self):
+        current_speed = self.toolhead
         while not self.__sensor_state['state']:
             
             self.gcode.run_script_from_command("G91\n"
-                                                f"G0 Z+{self.__step_distance}\n"
+                                                f"G0 Z+{self.__step_distance}F1800\n"
                                                 "G90")
             self.toolhead.wait_moves()
         self.gcode.run_script_from_command("G91\n"
@@ -195,14 +194,13 @@ class MachineTableSheetFinder:
     def cmd_FIND_METAL_SHEET(self, gcmd):
         pass
         self.__is_run = True
-        print(gcmd)
         self.__calc_start_position()
         self.sensor.start()
         self.go_to_start_position()
         try:
             self.move_down_and_check_touch()
         except Exception as e:
-            pass
+            raise gcmd.error('No metal sheet!')
         self.__is_run = False
         self.__sensor_state['state'] = False
 
