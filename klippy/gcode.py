@@ -117,6 +117,7 @@ class GCodeDispatch:
         self.mux_commands = {}
         self.gcode_help = {}
         self.status_commands = {}
+        self.available_multiple_plasma_codes = None
         # Register commands needed before config file is loaded
         handlers = ['M110', 'M112', 'M115',
                     'RESTART', 'FIRMWARE_RESTART', 'ECHO', 'STATUS', 'HELP']
@@ -206,10 +207,13 @@ class GCodeDispatch:
     # Parse input into commands
     args_r = re.compile('([A-Z_]+|[A-Z*/])')
     def _process_commands(self, commands, need_ack=True):
+        if self.available_multiple_plasma_codes:
+            commands = self.available_multiple_plasma_codes(commands)
         # NOTE: "run_script" calls this method with "need_ack=False".
         for line in commands:
             # Ignore comments and leading/trailing spaces
             line = origline = line.strip()
+            # cpos = sorted(list(filter(lambda val: val > -1, [line.find(';'), line.find('(')])))[0]
             cpos = line.find(';')
             if cpos >= 0:
                 line = line[:cpos]
