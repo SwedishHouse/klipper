@@ -208,8 +208,8 @@ class GCodeDispatch:
     args_r = re.compile('([A-Z_]+|[A-Z*/])')
     def _process_commands(self, commands, need_ack=True):
         if self.available_multiple_plasma_codes:
-            commands = self.available_multiple_plasma_codes.modify_coord_cmds(commands)
-            commands = self.available_multiple_plasma_codes.parse_gcode_line(commands)
+            # commands = self.available_multiple_plasma_codes.modify_coord_cmds(commands)
+            commands = self.available_multiple_plasma_codes(commands)
         # NOTE: "run_script" calls this method with "need_ack=False".
         for line in commands:
             # Ignore comments and leading/trailing spaces

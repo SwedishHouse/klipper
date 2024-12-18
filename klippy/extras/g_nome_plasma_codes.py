@@ -6,70 +6,56 @@ class GCodeSplitter:
     MOVE_CMDS = ('G0', 'G00', 'G1', 'G01', 'G2', 'G02', 'G3', 'G03')
 
     def __init__(self) -> None:
-        self.last_cmd = None
-        self.PATTERN = r'([GMSFTDH]-?\d+\.?\d*)|([XYZIJKR]-?\d+\.?\d*)|\(.*?\)'
+        self.last_command = "G0"
+        self.PATTERN = r'([GMSFTDH]-?\d+\.?\d*)|([XYZABCIJKR]-?\d+\.?\d*)|\(.*?\)'
+
+    def __call__(self, *args, **kwds):
+        
+        return self.split_grouped_commands(*args)
 
     @staticmethod
-    def is_coordinate_command(command):
-        # Регулярное выражение для проверки, содержит ли команда только координаты
-        pattern = r"\b(?:[XYZABC](?:\+|-)?\d+(?:\.\d+)?)|[IJKP](?:\+|-)?\d+(?:\.\d+)?\b"
+    def replace_decimal_point(command):
+        # Регулярное выражение для замены точки на нижнее подчеркивание в вещественных числах
+        return re.sub(r'(\d+)\.(\d+)', r'\1_\2', command)
+
+    @staticmethod
+    def remove_comments(command):
+        # Регулярное выражение для удаления комментариев внутри скобок
+        return re.sub(r'\(.*?\)', '', command).strip()
+
+    @staticmethod
+    def has_multiple_commands(command):
+        # Регулярное выражение для проверки наличия нескольких команд в строке
+        pattern = r'^[GMSF]\d+(\.\d+)?(\s+[GMSF]\d+(\.\d+)?)+$'
         return re.match(pattern, command) is not None
 
-    def modify_coord_cmds(self, cmds):
-        last_command = None  # Переменная для хранения последнего идентификатора команды
-    
-        result = []
-        
-        for command_str in cmds:
-            # Проверяем, является ли текущая строка командой
-            if not self.is_coordinate_command(command_str):
-                sub_cmd = command_str.split()
-                if len(sub_cmd) > 0:
-                    last_command = sub_cmd[0]  # Сохраняем последнюю команду
-                result.append(command_str)
+    def is_coordinate_only(self, command):
+        pattern = r'^[XYZABCIJ]\s*-?\d+(\.\d+)?(\s+[XYZABCIJ]\s*-?\d+(\.\d+)?)*$'
+        return re.match(pattern, command) is not None
+
+    def split_grouped_commands(self, commands):
+        processed_commands = []
+        for command in commands:
+            command = self.remove_comments(command)
+            # Проверка на наличие нескольких команд в строке
+            if self.has_multiple_commands(command):
+                # Разделение сгруппированных команд
+                # split_commands = re.findall(r'[GMSF]\d+(\.\d+)?', command)
+                split_commands = command.split()
+                split_commands = [self.replace_decimal_point(cmd) for cmd in split_commands]
+                processed_commands.extend(split_commands)
+            elif self.is_coordinate_only(command):
+                if self.last_command:
+                    command = self.last_command + ' ' + command
+                processed_commands.append(command)
             else:
-                # Если строка состоит только из координат, добавляем к ней последний известный идентификатор команды
-                if last_command is not None:
-                    result.append(last_command + ' ' + command_str.strip())
-                else:
-                    raise ValueError("Не найдена ни одной команды до координат.")
-                    
-        return result
-
-    def parse_gcode_line(self, line: list) -> list:
-        # Регулярное выражение для поиска команд и их параметров
-        result = []
-        for item in line:
-            matches = re.findall(self.PATTERN, item)
-
-            # Объединяем команды и параметры в один список
-            commands = []
-            current_command = None
-
-            for match in matches:
-                command = match[0] if match[0] else match[1]
-                if re.match(r'^[GMS][0-9]+(\.[0-9]+)?$', command):
-                    command = command.replace('.', '_')
-                # Если это новая команда, добавляем ее в список
-                if re.match(r'[GMSFTDH]', command):
-                    if current_command:
-                        commands.append(current_command)
-                    current_command = command
-                    if command in self.MOVE_CMDS:
-                        self.last_cmd = command
-                else:
-                    # Если это параметр, добавляем его к текущей команде
-                    if current_command:
-                        current_command += ' ' + command
-
-            # Добавляем последнюю команду
-            if current_command:
-                commands.append(current_command.strip())
-
-            result.extend(commands)
-            if result:
-                self.last_cmd = result[0]
-        return result
+                # command = self.replace_decimal_point(command)
+                processed_commands.append(command)
+                if len(command) > 0:
+                    cmd_identifier = command.split()[0]
+                    if cmd_identifier in self.MOVE_CMDS:
+                        self.last_command = cmd_identifier
+        return processed_commands
 
 class PlasmaCodes:
 
