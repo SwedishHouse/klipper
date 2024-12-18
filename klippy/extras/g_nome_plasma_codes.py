@@ -3,8 +3,38 @@ import re
 
 class GCodeSplitter:
 
+    MOVE_CMDS = ('G0', 'G00', 'G1', 'G01', 'G2', 'G02', 'G3', 'G03')
+
     def __init__(self) -> None:
+        self.last_cmd = None
         self.PATTERN = r'([GMSFTDH]-?\d+\.?\d*)|([XYZIJKR]-?\d+\.?\d*)|\(.*?\)'
+
+    @staticmethod
+    def is_coordinate_command(command):
+        # Регулярное выражение для проверки, содержит ли команда только координаты
+        pattern = r"\b(?:[XYZABC](?:\+|-)?\d+(?:\.\d+)?)|[IJKP](?:\+|-)?\d+(?:\.\d+)?\b"
+        return re.match(pattern, command) is not None
+
+    def modify_coord_cmds(self, cmds):
+        last_command = None  # Переменная для хранения последнего идентификатора команды
+    
+        result = []
+        
+        for command_str in cmds:
+            # Проверяем, является ли текущая строка командой
+            if not self.is_coordinate_command(command_str):
+                sub_cmd = command_str.split()
+                if len(sub_cmd) > 0:
+                    last_command = sub_cmd[0]  # Сохраняем последнюю команду
+                result.append(command_str)
+            else:
+                # Если строка состоит только из координат, добавляем к ней последний известный идентификатор команды
+                if last_command is not None:
+                    result.append(last_command + ' ' + command_str.strip())
+                else:
+                    raise ValueError("Не найдена ни одной команды до координат.")
+                    
+        return result
 
     def parse_gcode_line(self, line: list) -> list:
         # Регулярное выражение для поиска команд и их параметров
@@ -18,12 +48,15 @@ class GCodeSplitter:
 
             for match in matches:
                 command = match[0] if match[0] else match[1]
-
+                if re.match(r'^[GMS][0-9]+(\.[0-9]+)?$', command):
+                    command = command.replace('.', '_')
                 # Если это новая команда, добавляем ее в список
                 if re.match(r'[GMSFTDH]', command):
                     if current_command:
                         commands.append(current_command)
                     current_command = command
+                    if command in self.MOVE_CMDS:
+                        self.last_cmd = command
                 else:
                     # Если это параметр, добавляем его к текущей команде
                     if current_command:
@@ -34,6 +67,8 @@ class GCodeSplitter:
                 commands.append(current_command.strip())
 
             result.extend(commands)
+            if result:
+                self.last_cmd = result[0]
         return result
 
 class PlasmaCodes:
@@ -46,7 +81,7 @@ class PlasmaCodes:
         self.printer = config.get_printer()
         self.gcode = self.printer.lookup_object('gcode')
         self.splitter = GCodeSplitter()
-        setattr(self.gcode, 'available_multiple_plasma_codes', self.splitter.parse_gcode_line)
+        setattr(self.gcode, 'available_multiple_plasma_codes', self.splitter)
         
         for i in self.CODES:
             try:
