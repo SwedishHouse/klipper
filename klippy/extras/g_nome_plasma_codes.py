@@ -16,7 +16,8 @@ class GCodeSplitter:
     @staticmethod
     def replace_decimal_point(command):
         # Регулярное выражение для замены точки на нижнее подчеркивание в вещественных числах
-        return re.sub(r'(\d+)\.(\d+)', r'\1_\2', command)
+        modified_string = re.sub(r'G(\d+)\.(\d)', r'G\1_\2', command)
+        return modified_string
 
     @staticmethod
     def remove_comments(command):
@@ -26,8 +27,14 @@ class GCodeSplitter:
     @staticmethod
     def has_multiple_commands(command):
         # Регулярное выражение для проверки наличия нескольких команд в строке
-        pattern = r'^[GMSF]\d+(\.\d+)?(\s+[GMSF]\d+(\.\d+)?)+$'
-        return re.match(pattern, command) is not None
+        g_pattern = r'G\d+(\.\d)?'
+        # Регулярное выражение для поиска любых других команд
+        other_pattern = r'[A-FH-Z]\d+(\.\d)?|[A-FH-Z]-?\d+(\.\d)?'
+        # Поиск всех совпадений в строке
+        g_matches = re.findall(g_pattern, command)
+        other_matches = re.findall(other_pattern, command)
+        # Проверка наличия нескольких команд "G" и отсутствия других команд
+        return len(g_matches) > 1 and len(other_matches) == 0
 
     def is_coordinate_only(self, command):
         pattern = r'^[XYZABCIJ]\s*-?\d+(\.\d+)?(\s+[XYZABCIJ]\s*-?\d+(\.\d+)?)*$'
@@ -39,9 +46,13 @@ class GCodeSplitter:
             command = self.remove_comments(command)
             # Проверка на наличие нескольких команд в строке
             if self.has_multiple_commands(command):
+            # if self.has_multiple_commands(command) and re.match(r'(M\d+ S\d+)|([GSFM]\d+(\.\d+))', command):
+            # if re.match(r'(M\d+ S\d+)|([GSFM]\d+(\.\d+))', command):
                 # Разделение сгруппированных команд
                 # split_commands = re.findall(r'[GMSF]\d+(\.\d+)?', command)
                 split_commands = command.split()
+                # split_commands = self.parse_commands(command)
+
                 split_commands = [self.replace_decimal_point(cmd) for cmd in split_commands]
                 processed_commands.extend(split_commands)
             elif self.is_coordinate_only(command):
@@ -49,6 +60,10 @@ class GCodeSplitter:
                     command = self.last_command + ' ' + command
                 processed_commands.append(command)
             else:
+                if not re.match(r'M\d+ S\d+$', command) and re.match(r'S\d+$', command):
+                    command = f'S {command[1::]}'
+                if command.startswith('F'):
+                    command = f'{self.last_command} {command}'
                 # command = self.replace_decimal_point(command)
                 processed_commands.append(command)
                 if len(command) > 0:
@@ -96,6 +111,9 @@ class PlasmaCodes:
         if not cmd_num:
             self.gcode.error('Not a integer value in gcode!')
         cmd_params = gcmd.get_raw_command_parameters()
+        if cmd_num in (2, 3) and 'F' not in cmd_params:
+            cmd_params += 'F6000'
+            # pass
         cmd = f'G{cmd_num} {cmd_params}'
         self.gcode.run_script_from_command(cmd)
         pass
