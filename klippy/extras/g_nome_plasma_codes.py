@@ -62,7 +62,7 @@ class GCodeSplitter:
             else:
                 if not re.match(r'M\d+ S\d+$', command) and re.match(r'S\d+$', command):
                     command = f'S {command[1::]}'
-                if command.startswith('F'):
+                if command.startswith('F') and re.match(r'F\d+(\.\d)?', command):
                     command = f'{self.last_command} {command}'
                 # command = self.replace_decimal_point(command)
                 processed_commands.append(command)
