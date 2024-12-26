@@ -159,7 +159,7 @@ class MachineTableSheetFinder:
         
 
     def go_to_start_position(self):
-        self.gcode.run_script_from_command(f"G0 Z{self.__startSearchPoint}")
+        self.gcode.run_script_from_command(f"G90\nG0 Z{self.__startSearchPoint}")
         pass
 
     def sensor_event(self, time, state):
