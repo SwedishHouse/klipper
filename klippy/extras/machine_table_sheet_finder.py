@@ -133,6 +133,7 @@ class MachineTableSheetFinder:
         self.config = config
         self.__limit = None
         self.__startSearchPoint = config.getfloat('start_height', 50.0)
+        self.__speed = config.getfloat('feedrate', 2000.0)
         self.__sheetThickness = config.getfloat('sheet_thickness', 3.0)
         self.__cutterDistanceToSheet = config.getfloat('work_height', 3.0)
         self.__step_distances = (3.0, 1.0, 0.5, 0.25, 0.1)
@@ -180,7 +181,7 @@ class MachineTableSheetFinder:
         while not self.__sensor_state['state']:
             
             self.gcode.run_script_from_command("G91\n"
-                                                f"G0 Z+{self.__step_distance}F1800\n"
+                                                f"G0 Z-{self.__step_distance}F{self.__speed}\n"
                                                 "G90")
             self.toolhead.wait_moves()
         self.gcode.run_script_from_command("G91\n"
