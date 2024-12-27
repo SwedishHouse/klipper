@@ -60,20 +60,17 @@ class MetalSensor(Signal):
 
     def __init__(self, config) -> None:
         self.printer = config.get_printer()
-        # self.name = config.get_name().split(' ')[-1]
+
         # Object params
         self.__is_ready = False
-        self.__last_button_event_time = 0.0 # Needs for handling contact bounce
-        self.__button_event_is_set = False
+
         self.sensor_event_handler = None # Needs for Metal table event handling
         self.last_state = 0
 
         # Some params read from config
 
-        # pin = config.get('work_level', 0)
         self.sensor_type = config.get('work_level', 'usual')
-        # if pin.startswith('!'):
-        #     self.sensor_type = 'inversed'
+
         if self.sensor_type not in self.sensor_active_level:
             raise ValueError(f'Unknown sensor type {self.sensor_type}')
         else:
@@ -109,10 +106,6 @@ class MetalSensor(Signal):
         self._is_ready = True
 
     def button_callback(self, eventtime, state):
-       # if not self.__button_event_is_set:
-        #     self.__button_event_is_set = True
-        #     self.__last_button_event_time = eventtime 
-        # if self.__is_ready and self.__is_activated(state):
         if self.__is_ready and state:
             self.emit(eventtime, True)
     
