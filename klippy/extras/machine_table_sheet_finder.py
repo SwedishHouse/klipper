@@ -60,7 +60,7 @@ class MetalSensor(Signal):
 
     def __init__(self, config) -> None:
         self.printer = config.get_printer()
-
+        self.gcode = self.printer.lookup_object('gcode')
         # Object params
         self.__is_ready = False
 
@@ -87,10 +87,13 @@ class MetalSensor(Signal):
             pullup = config.getfloat('analog_pullup_resistor', 4700., above=0.)
             buttons.register_adc_button(self.pin, amin, amax, pullup,
                                         self.button_callback)
-        
+        self.gcode.register_command('QUERY_METAL_SENSOR', self.cmd_QUERY_METAL_SENSOR)
         self.printer.register_event_handler("klippy:ready", self.__ready_event) # When will be ready we can start reading the sensor
         self.printer.add_object("g_nome_metall_sensor", self) # Save the object for later use
-    
+
+    def cmd_QUERY_METAL_SENSOR(self, params):
+        self.gcode.respond_info(f"State = {self.last_state}")
+
     def connect(self, slot):
         if not self.sensor_event_handler:
             self.sensor_event_handler = slot
@@ -106,9 +109,13 @@ class MetalSensor(Signal):
         self._is_ready = True
 
     def button_callback(self, eventtime, state):
+        self.last_state = state
         if self.__is_ready and state:
             self.emit(eventtime, True)
     
+    def get_status(self, eventtime=None):
+        return {'state': self.last_state}
+
     def start(self):
         self.__is_ready = True
 
@@ -136,7 +143,7 @@ class MachineTableSheetFinder:
         self.__trigger_stop_range = config.getfloat('trigger_stop_range', 3.0)
         self.__cutterDistanceToSheet = config.getfloat('work_height', 3.0)
         self.__step_distances = (3.0, 1.0, 0.5, 0.25, 0.1)
-        self.__step_distance = config.getfloat('step_distance', 1.0)
+        self.__step_distance = config.getfloat('step_distance', 0.5)
         self.__is_run = False
         self.__sensor_state = {'time': 0.0, 'state': False}
         self.__axis_max = None
@@ -178,6 +185,7 @@ class MachineTableSheetFinder:
     def move_down_and_check_touch(self):
         current_speed = self.toolhead
         while not self.__sensor_state['state']:
+        # while not self.sensor.get_status():
             
             self.gcode.run_script_from_command("G91\n"
                                                 f"G0 Z-{self.__step_distance}F{self.__speed}\n"
