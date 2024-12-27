@@ -55,8 +55,7 @@ class Signal(metaclass=abc.ABCMeta):
        pass
 
 class MetalSensor(Signal):
-
-    sensor_types = {'NPN': 1, 'PNP': 1}
+    sensor_active_level = {'inversed': 0, 'usual': 1}
     send = {'time': 0.0, 'state': False}
 
     def __init__(self, config) -> None:
@@ -71,12 +70,15 @@ class MetalSensor(Signal):
 
         # Some params read from config
 
-        self.sensor_type = config.get('sensor_type', 'NPN')
-        if self.sensor_type not in self.sensor_types:
+        # pin = config.get('work_level', 0)
+        self.sensor_type = config.get('work_level', 'usual')
+        # if pin.startswith('!'):
+        #     self.sensor_type = 'inversed'
+        if self.sensor_type not in self.sensor_active_level:
             raise ValueError(f'Unknown sensor type {self.sensor_type}')
         else:
-            self.active_state = self.sensor_types[self.sensor_type]
-    
+            self.active_state = self.sensor_active_level[self.sensor_type]
+        
         self.pin = config.get('pin')
         
         # Set up button for handling metal sensor events
@@ -107,14 +109,18 @@ class MetalSensor(Signal):
         self._is_ready = True
 
     def button_callback(self, eventtime, state):
-        # if not self.__button_event_is_set:
+       # if not self.__button_event_is_set:
         #     self.__button_event_is_set = True
-        #     self.__last_button_event_time = eventtime
-        if self.__is_ready and self.__is_activated(state):
+        #     self.__last_button_event_time = eventtime 
+        # if self.__is_ready and self.__is_activated(state):
+        if self.__is_ready and state:
             self.emit(eventtime, True)
     
     def start(self):
         self.__is_ready = True
+
+    def stop(self):
+        self.__is_ready = False
     
     def __is_activated(self, state):
         return self.active_state == state
@@ -134,7 +140,7 @@ class MachineTableSheetFinder:
         self.__limit = None
         self.__startSearchPoint = config.getfloat('start_height', 50.0)
         self.__speed = config.getfloat('feedrate', 2000.0)
-        self.__sheetThickness = config.getfloat('sheet_thickness', 3.0)
+        self.__trigger_stop_range = config.getfloat('trigger_stop_range', 3.0)
         self.__cutterDistanceToSheet = config.getfloat('work_height', 3.0)
         self.__step_distances = (3.0, 1.0, 0.5, 0.25, 0.1)
         self.__step_distance = config.getfloat('step_distance', 1.0)
@@ -151,11 +157,11 @@ class MachineTableSheetFinder:
 
     @property
     def get_sheet_thickness(self):
-        return self.__sheetThickness
+        return self.__trigger_stop_range
     
     @get_sheet_thickness.setter
     def get_sheet_thickness(self, value):
-        self.__sheetThickness = value
+        self.__trigger_stop_range = value
         
 
     def go_to_start_position(self):
@@ -185,7 +191,7 @@ class MachineTableSheetFinder:
                                                 "G90")
             self.toolhead.wait_moves()
         self.gcode.run_script_from_command("G91\n"
-                                                f"G0 Z-{self.__sheetThickness + self.__cutterDistanceToSheet}\n"
+                                                f"G0 Z+{self.__trigger_stop_range + self.__cutterDistanceToSheet}\n"
                                                 "G90")
 
     def _ready_event(self):
@@ -201,8 +207,10 @@ class MachineTableSheetFinder:
         try:
             self.move_down_and_check_touch()
         except Exception as e:
+            self.sensor.stop()
             raise gcmd.error('No metal sheet!')
         self.__is_run = False
+        self.sensor.stop()
         self.__sensor_state['state'] = False
 
 
