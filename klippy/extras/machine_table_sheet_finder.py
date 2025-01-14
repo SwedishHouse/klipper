@@ -142,6 +142,7 @@ class MachineTableSheetFinder:
         self.__speed = config.getfloat('feedrate', 2000.0)
         self.__trigger_stop_range = config.getfloat('trigger_stop_range', 3.0)
         self.__cutterDistanceToSheet = config.getfloat('work_height', 3.0)
+        self.__working_axis = config.get('axis', 'Z').upper()
         self.__step_distances = (3.0, 1.0, 0.5, 0.25, 0.1)
         self.__step_distance = config.getfloat('step_distance', 0.5)
         self.__is_run = False
@@ -166,6 +167,7 @@ class MachineTableSheetFinder:
 
     def go_to_start_position(self):
         self.gcode.run_script_from_command(f"G90\nG0 Z{self.__startSearchPoint}")
+        self.toolhead.wait_moves()
         pass
 
     def sensor_event(self, time, state):
@@ -179,18 +181,28 @@ class MachineTableSheetFinder:
     def _connect_event(self):# Called when the printer is connected
         self.toolhead = self.printer.lookup_object('toolhead')
         self.__limit = self.toolhead.kin.axes_max.z
+        self.__working_axis_index = self.toolhead.axis_names.find(self.__working_axis)
         self.sensor.connect(self.sensor_event)
         pass
 
     def move_down_and_check_touch(self):
-        current_speed = self.toolhead
+        pass
+        # self.gcode.run_script_from_command(f"G0 Z{0}")
+        current_position = self.toolhead.get_position()
+        speed = 2000
+        current_position[self.__working_axis_index] = 0
+        self.toolhead.manual_move(current_position, speed)
+        # self.toolhead.move(current_position, 600)
+        # self.toolhead.flush_step_generation()
         while not self.__sensor_state['state']:
+            pass
         # while not self.sensor.get_status():
             
-            self.gcode.run_script_from_command("G91\n"
-                                                f"G0 Z-{self.__step_distance}F{self.__speed}\n"
-                                                "G90")
-            self.toolhead.wait_moves()
+            # self.gcode.run_script_from_command("G91\n"
+            #                                     f"G0 Z-{self.__step_distance}F{self.__speed}\n"
+            #                                     "G90")
+            # self.toolhead.wait_moves()
+        self.toolhead.dwell(0)
         self.gcode.run_script_from_command("G91\n"
                                                 f"G0 Z+{self.__trigger_stop_range + self.__cutterDistanceToSheet}\n"
                                                 "G90")
